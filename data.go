@@ -3,6 +3,7 @@ package astits
 import (
 	"encoding/binary"
 	"fmt"
+
 	"github.com/asticode/go-astikit"
 )
 
@@ -16,15 +17,16 @@ const (
 
 // DemuxerData represents a data parsed by Demuxer
 type DemuxerData struct {
-	EIT         *EITData
-	FirstPacket *Packet
-	NIT         *NITData
-	PAT         *PATData
-	PES         *PESData
-	PID         uint16
-	PMT         *PMTData
-	SDT         *SDTData
-	TOT         *TOTData
+	EIT           *EITData
+	FirstPacket   *Packet
+	NIT           *NITData
+	PAT           *PATData
+	PES           *PESData
+	PID           uint16
+	PMT           *PMTData
+	SDT           *SDTData
+	TOT           *TOTData
+	SCTE35Payload []byte
 }
 
 // MuxerData represents a data to be written by Muxer
@@ -35,7 +37,7 @@ type MuxerData struct {
 }
 
 // parseData parses a payload spanning over multiple packets and returns a set of data
-func parseData(ps []*Packet, prs PacketsParser, pm *programMap) (ds []*DemuxerData, err error) {
+func parseData(ps []*Packet, prs PacketsParser, pm, sm *programMap) (ds []*DemuxerData, err error) {
 	// Use custom parser first
 	if prs != nil {
 		var skip bool
@@ -105,6 +107,20 @@ func parseData(ps []*Packet, prs PacketsParser, pm *programMap) (ds []*DemuxerDa
 				PID:         pid,
 			},
 		}
+	} else if sm.existsUnlocked(pid) {
+		var scte35Payload []byte
+		if scte35Payload, err = extractSCTE35Payload(i); err != nil {
+			err = fmt.Errorf("astits: parsing SCTE35 payload failed: %w", err)
+			return
+		}
+		ds = []*DemuxerData{
+			{
+				FirstPacket:   fp,
+				SCTE35Payload: scte35Payload,
+				PID:           pid,
+			},
+		}
+
 	}
 	return
 }
